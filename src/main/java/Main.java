@@ -25,6 +25,8 @@ import java.util.List;
 
 public class Main {
 
+    static List<CompilationUnit> compilationUnits = null;
+
     public static void main(String args[]) {
         // Path to Android test application code
         String path = "/Users/marc/AndroidStudioProjects/JPTestProject";
@@ -37,7 +39,6 @@ public class Main {
         SymbolSolverCollectionStrategy symbolSolverCollectionStrategy = new SymbolSolverCollectionStrategy();
         ProjectRoot projectRoot = symbolSolverCollectionStrategy.collect(androidProject.toPath());
 
-        List<CompilationUnit> compilationUnits = null;
         for (SourceRoot sourceRoot : projectRoot.getSourceRoots()) {
             System.out.println("Source root: " + sourceRoot);
             try {
@@ -62,6 +63,7 @@ public class Main {
 
                 if (name.equals("PathCode.java")) {
                     analyzeMethodCallExpr(compilationUnit);
+                    analyzeMethodCallExprFix(compilationUnit);
                 } else if (name.equals("URLCode.java")) {
                     analyzeNameExpr(compilationUnit);
                 }
@@ -109,18 +111,7 @@ public class Main {
                     for (ReturnStmt returnStmt : methodDeclaration.findAll(ReturnStmt.class)) {
                         Expression expression = returnStmt.getExpression().get();
 
-                        if (expression.isNameExpr()) {
-                            ResolvedValueDeclaration resolvedValueDeclaration = null;
-                            try {
-                                resolvedValueDeclaration = expression.asNameExpr().resolve();
-                            } catch (Exception e) {
-                                System.out.println("Error resolving NameExpr: " + e);
-                            }
-
-                            if (resolvedValueDeclaration != null) {
-                                System.out.println("Resolved: " + resolvedValueDeclaration);
-                            }
-                        }
+                        analyzeNameExpr(expression);
                     }
                 }
             }
@@ -128,6 +119,44 @@ public class Main {
 
         for (Node child: node.getChildNodes()) {
             analyzeMethodCallExpr(child);
+        }
+    }
+
+    public static void analyzeMethodCallExprFix(Node node) {
+        if (node instanceof MethodCallExpr) {
+            if (((MethodCallExpr) node).getName().asString().equals("getURL")) {
+                ResolvedMethodDeclaration resolvedMethodDeclaration = null;
+                try {
+                    resolvedMethodDeclaration = ((MethodCallExpr) node).resolve();
+                } catch (Exception e) {
+                    System.out.println("Error: " + e);
+                }
+
+                if (resolvedMethodDeclaration != null) {
+                    System.out.println("MethodCallExpr resolved: " + resolvedMethodDeclaration);
+
+                    MethodDeclaration methodDeclaration = ((JavaParserMethodDeclaration) resolvedMethodDeclaration)
+                            .getWrappedNode();
+
+                    for (CompilationUnit compilationUnit : compilationUnits) {
+                        for (MethodDeclaration methodDeclaration1 : compilationUnit.findAll(MethodDeclaration.class)) {
+                            if (methodDeclaration1.equals(methodDeclaration)) {
+                                methodDeclaration = methodDeclaration1;
+                            }
+                        }
+                    }
+
+                    for (ReturnStmt returnStmt : methodDeclaration.findAll(ReturnStmt.class)) {
+                        Expression expression = returnStmt.getExpression().get();
+
+                        analyzeNameExpr(expression);
+                    }
+                }
+            }
+        }
+
+        for (Node child: node.getChildNodes()) {
+            analyzeMethodCallExprFix(child);
         }
     }
 
